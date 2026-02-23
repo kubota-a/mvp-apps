@@ -155,7 +155,17 @@ MVPではコア業務フロー（ロール制御＋ステータス管理）を�
 - ユーザー絞り込み検索
 - キーワード検索
 - ソート
-  
+
+### 8. 本番運用でデータ量が増えた場合のDBチューニング
+本MVPではインデックス設計を最小限に留めているが、  
+本番運用でタスク数・ユーザー数が増加した場合には、以下の最適化を検討する。
+- 論理削除カラムを条件にしたパーティアルインデックスの付与  
+  例：`WHERE deleted_at IS NULL` を条件としたインデックスを作成し、  
+    一覧表示で使用する「未削除タスク」の検索性能を最適化する
+- 一般ユーザーのタスク一覧（期限順）向けの複合インデックスの追加  
+  例：`tasks(user_id, due_at)` にパーティアル複合インデックスを付与し、  
+    「自分のタスクを期限が近い順に表示する」クエリの性能を改善する
+
 ---
 
 # 1. 🔑 テストアカウント（Test Accounts）
@@ -188,22 +198,84 @@ MVPではコア業務フロー（ロール制御＋ステータス管理）を�
 
 ---
 
-# 3. 🗄 ER図（Database Design）
+# 3. 🗄 テーブル設計・ER図（Database Design）
 
 本アプリで使用するテーブル構造を以下に示す。
 
-> **※図は `images/er.png` を参照**
+> **※図は `images/er.png` を参照**  
+> （tasks.user_id にインデックス付与を示す記号を追加）
 
 ![ER図](./images/er.png)
 
-### テーブル一覧
-- `users`（ユーザー情報）
-- `items`（メインデータ：例：メモ／申請／在庫 など）
-- その他必要に応じて追加
+---
 
-### 関係
-- User : Item = 1 : N  
-（ユーザーが複数のデータを持つ構成）
+## 📌 テーブル一覧
+
+- `users`（ユーザー情報）
+- `tasks`（タスク情報）
+- `statuses`（タスクの状態マスタ）
+
+---
+
+## 🔗 テーブル間の関係
+
+- **users 1 : N tasks**  
+　（1人のユーザーが複数のタスクを持つ）
+
+- **statuses 1 : N tasks**  
+　（1つのステータスが複数のタスクに紐づく）
+
+---
+
+## 📋 各テーブル詳細
+
+---
+
+### 🧍‍♂️ users（ユーザー情報）
+
+| カラム名 | 型 | 説明 |
+|---------|-----|-------|
+| id | BIGSERIAL | 主キー（PK） |
+| login_id | VARCHAR(50) | ログインID（UNIQUE / NOT NULL）※ログイン時の検索高速化のためインデックス付与 |
+| password_hash | VARCHAR(255) | パスワード（ハッシュ化 / NOT NULL） |
+| name | VARCHAR(50) | 氏名（表示名 / NOT NULL） |
+| role | VARCHAR(20) | ロール（`user` / `admin` のみ許可・CHECK制約 / NOT NULL） |
+| created_at | TIMESTAMP WITH TIME ZONE | 作成日時（NOT NULL / 自動付与） |
+
+---
+
+### 📝 tasks（タスク情報）
+
+| カラム名 | 型 | 説明 |
+|---------|-----|-------|
+| id | BIGSERIAL | 主キー（PK） |
+| user_id | BIGINT | 担当者（FK → users.id / NOT NULL / **一覧取得で頻繁に利用するためインデックス付与**） |
+| status_id | SMALLINT | ステータス（FK → statuses.id / NOT NULL） |
+| title | VARCHAR(100) | タスク内容（NOT NULL） |
+| due_at | TIMESTAMP WITH TIME ZONE | 期限日時（NOT NULL） |
+| created_at | TIMESTAMP WITH TIME ZONE | 作成日時（NOT NULL） |
+| updated_at | TIMESTAMP WITH TIME ZONE | 更新日時（NOT NULL） |
+| deleted_at | TIMESTAMP WITH TIME ZONE | 論理削除（NULL = 有効、日時が入れば削除扱い） |
+
+---
+
+### 🟦 statuses（ステータスマスタ）
+
+| カラム名 | 型 | 説明 |
+|---------|-----|-------|
+| id | SMALLSERIAL | 主キー（PK） |
+| name | VARCHAR(20) | ステータス名（UNIQUE / NOT NULL） |
+| display_order | SMALLINT | UI 表示順（NOT NULL） |
+
+---
+
+## 📝 設計補足（運用・拡張性を考慮した仕様）
+
+- タスクの論理削除は `deleted_at IS NULL` を前提に一覧取得
+- ステータスはマスタテーブル化し、将来「保留中」「レビュー待ち」など拡張可能
+- 一般ユーザーは自分の tasks のみ取得するため  
+  `tasks.user_id` のインデックスが一覧表示の主要な高速化ポイント
+- 本番運用規模では、`tasks(user_id, due_at)` の複合インデックス追加も検討（課題2に記載）
 
 ---
 
