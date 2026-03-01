@@ -242,6 +242,8 @@ MVPではコア業務フロー（ロール制御＋ステータス管理）を�
 | role | VARCHAR(20) | ロール（`user` / `admin` のみ許可・CHECK制約 / NOT NULL） |
 | created_at | TIMESTAMP WITH TIME ZONE | 作成日時（NOT NULL / 自動付与） |
 
+※将来的にロールが増えるとしてもチームリーダー1つ程度の想定なので、JOINなどの手間が増えるroleのマスタ化は行わない。
+
 ---
 
 ### 📝 tasks（タスク情報）

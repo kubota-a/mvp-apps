@@ -15,7 +15,7 @@ class User(UserMixin, db.Model):    # ログイン判定ができるように「
 
     # テーブル全体への制約追加オプション
     __table_args__ = (
-        CheckConstraint(    # チェック制約
+        CheckConstraint(    # チェック制約（ロールは増えてもあと1つ程度の想定なので、rolesマスタ化はしない）
             "role IN ('user', 'admin')",    # role は 'user' か 'admin' のどちらかだけ許可
             name = "ck_users_role_valid"    # 制約名の設定
             ),
@@ -63,3 +63,10 @@ class Task(db.Model):
         ) 
     deleted_at = db.Column(db.DateTime(timezone=True), nullable=True)    # 削除日時（論理削除用。値が入っていれば削除済み。※デフォルト値付けたらレコード作成時から日時が入って最初から「削除済み扱い」になってしまうので付けない。日時はPython側でセットする）
 
+# --- Statusモデル ---
+class Status(db.Model):
+    __tablename__ = "statuses"    # 実際のDB上のテーブル名をstatusesに指定
+
+    id = db.Column(db.SmallInteger, primary_key=True)    # 自動採番の小さな整数型・主キー
+    name = db.Column(db.String(20), unique=True, nullable=False)    # ステータス名
+    display_order = db.Column(db.SmallInteger, nullable=False)    # UI表示順
